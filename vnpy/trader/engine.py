@@ -525,13 +525,14 @@ class EmailEngine(BaseEngine):
         if not receiver:
             receiver = SETTINGS["email.receiver"]
 
-        msg = EmailMessage()
-        msg["From"] = SETTINGS["email.sender"]
-        msg["To"] = receiver
-        msg["Subject"] = subject
-        msg.set_content(content)
+        for r in receiver.split(";"):
+            msg = EmailMessage()
+            msg["From"] = SETTINGS["email.sender"]
+            msg["To"] = r
+            msg["Subject"] = subject
+            msg.set_content(content)
 
-        self.queue.put(msg)
+            self.queue.put(msg)
 
     def run(self) -> None:
         """"""
