@@ -5,8 +5,6 @@ SPY-USD-STK   SMART
 EUR-USD-CASH  IDEALPRO
 XAUUSD-USD-CMDTY  SMART
 ES-202002-USD-FUT  GLOBEX
-SI-202006-1000-USD-FUT  NYMEX
-ES-2020006-C-2430-50-USD-FOP  GLOBEX
 """
 
 
@@ -81,12 +79,7 @@ EXCHANGE_VT2IB = {
     Exchange.CFE: "CFE",
     Exchange.NYSE: "NYSE",
     Exchange.NASDAQ: "NASDAQ",
-    Exchange.ARCA: "ARCA",
-    Exchange.EDGEA: "EDGEA",
-    Exchange.ISLAND: "ISLAND",
-    Exchange.BATS: "BATS",
-    Exchange.IEX: "IEX",
-    Exchange.IBKRATS: "IBKRATS",
+    Exchange.ARCA: "ARCA"
 }
 EXCHANGE_IB2VT = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
@@ -245,7 +238,6 @@ class IbApi(EWrapper):
         self.contracts = {}
 
         self.tick_exchange = {}
-        self.subscribed = set()
 
         self.history_req = None
         self.history_condition = Condition()
@@ -360,7 +352,7 @@ class IbApi(EWrapper):
 
         tick = self.ticks[reqId]
         dt = datetime.fromtimestamp(int(value))
-        tick.datetime = self.local_tz.localize(dt)
+        tick.datetime = dt.replace(tzinfo=self.local_tz)
 
         self.gateway.on_tick(copy(tick))
 
@@ -424,7 +416,7 @@ class IbApi(EWrapper):
         order = OrderData(
             symbol=ib_contract.conId,
             exchange=EXCHANGE_IB2VT.get(
-                ib_contract.exchange, Exchange.SMART),
+                ib_contract.exchange, ib_contract.exchange),
             type=ORDERTYPE_IB2VT[ib_order.orderType],
             orderid=orderid,
             direction=DIRECTION_IB2VT[ib_order.action],
@@ -565,11 +557,11 @@ class IbApi(EWrapper):
         super().execDetails(reqId, contract, execution)
 
         dt = datetime.strptime(execution.time, "%Y%m%d  %H:%M:%S")
-        dt = self.local_tz.localize(dt)
+        dt = dt.replace(tzinfo=self.local_tz)
 
         trade = TradeData(
             symbol=contract.conId,
-            exchange=EXCHANGE_IB2VT.get(contract.exchange, Exchange.SMART),
+            exchange=EXCHANGE_IB2VT.get(contract.exchange, contract.exchange),
             orderid=str(execution.orderId),
             tradeid=str(execution.execId),
             direction=DIRECTION_IB2VT[execution.side],
@@ -599,7 +591,7 @@ class IbApi(EWrapper):
         Callback of history data update.
         """
         dt = datetime.strptime(ib_bar.date, "%Y%m%d %H:%M:%S")
-        dt = self.local_tz.localize(dt)
+        dt = dt.replace(tzinfo=self.local_tz)
 
         bar = BarData(
             symbol=self.history_req.symbol,
@@ -658,11 +650,6 @@ class IbApi(EWrapper):
         if req.exchange not in EXCHANGE_VT2IB:
             self.gateway.write_log(f"不支持的交易所{req.exchange}")
             return
-
-        # Filter duplicate subscribe
-        if req.vt_symbol in self.subscribed:
-            return
-        self.subscribed.add(req.vt_symbol)
 
         # Extract ib contract detail
         ib_contract = generate_ib_contract(req.symbol, req.exchange)
@@ -749,7 +736,7 @@ class IbApi(EWrapper):
             end = req.end
             end_str = end.strftime("%Y%m%d %H:%M:%S")
         else:
-            end = datetime.now(self.local_tz)
+            end = datetime.now()
             end_str = ""
 
         delta = end - req.start
@@ -843,10 +830,6 @@ def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
 
         if ib_contract.secType in ["FUT", "OPT", "FOP"]:
             ib_contract.lastTradeDateOrContractMonth = fields[1]
-
-        if ib_contract.secType == "FUT":
-            if len(fields) == 5:
-                ib_contract.multiplier = int(fields[2])
 
         if ib_contract.secType in ["OPT", "FOP"]:
             ib_contract.right = fields[2]

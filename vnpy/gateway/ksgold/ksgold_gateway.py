@@ -269,7 +269,7 @@ class KsgoldMdApi(MdApi):
 
         timestamp = f"{data['QuoteDate']} {data['QuoteTime']}.{int(data['UpdateMillisec']/100)}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S.%f")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         tick = TickData(
             symbol=symbol,
@@ -622,7 +622,7 @@ class KsgoldTdApi(TdApi):
         today = datetime.now().strftime("%Y%m%d")
         timestamp = f"{today} {data['EntrustTime']}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         order = OrderData(
             symbol=symbol,
@@ -656,7 +656,7 @@ class KsgoldTdApi(TdApi):
         today = datetime.now().strftime("%Y%m%d")
         timestamp = f"{today} {data['MatchTime']}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         trade = TradeData(
             symbol=symbol,

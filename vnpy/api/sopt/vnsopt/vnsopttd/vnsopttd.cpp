@@ -8678,12 +8678,12 @@ int TdApi::exit()
 
 void TdApi::subscribePrivateTopic(int x)
 {
-	this->api->SubscribePrivateTopic((THOST_TE_RESUME_TYPE) x);
+	this->api->SubscribePrivateTopic(THOST_TERT_RESTART);
 }
 
 void TdApi::subscribePublicTopic(int x)
 {
-	this->api->SubscribePublicTopic((THOST_TE_RESUME_TYPE) x);
+	this->api->SubscribePublicTopic(THOST_TERT_RESTART);
 }
 
 string TdApi::getTradingDay()

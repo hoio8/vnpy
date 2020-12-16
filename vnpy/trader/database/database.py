@@ -19,7 +19,6 @@ class Driver(Enum):
     MYSQL = "mysql"
     POSTGRESQL = "postgresql"
     MONGODB = "mongodb"
-    INFLUX = "influxdb"
 
 
 class BaseDatabaseManager(ABC):

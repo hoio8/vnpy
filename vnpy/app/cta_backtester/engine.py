@@ -167,16 +167,7 @@ class BacktesterEngine(BaseEngine):
         )
 
         engine.load_data()
-
-        try:
-            engine.run_backtesting()
-        except Exception:
-            msg = f"策略回测失败，触发异常：\n{traceback.format_exc()}"
-            self.write_log(msg)
-
-            self.thread = None
-            return
-
+        engine.run_backtesting()
         self.result_df = engine.calculate_result()
         self.result_statistics = engine.calculate_statistics(output=False)
 

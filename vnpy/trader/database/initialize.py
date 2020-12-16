@@ -5,9 +5,7 @@ from .database import BaseDatabaseManager, Driver
 def init(settings: dict) -> BaseDatabaseManager:
     driver = Driver(settings["driver"])
     if driver is Driver.MONGODB:
-        return init_mongo(driver=driver, settings=settings)
-    elif driver is Driver.INFLUX:
-        return init_influx(driver=driver, settings=settings)
+        return init_nosql(driver=driver, settings=settings)
     else:
         return init_sql(driver=driver, settings=settings)
 
@@ -20,13 +18,7 @@ def init_sql(driver: Driver, settings: dict):
     return _database_manager
 
 
-def init_mongo(driver: Driver, settings: dict):
+def init_nosql(driver: Driver, settings: dict):
     from .database_mongo import init
-    _database_manager = init(driver, settings=settings)
-    return _database_manager
-
-
-def init_influx(driver: Driver, settings: dict):
-    from .database_influx import init
     _database_manager = init(driver, settings=settings)
     return _database_manager

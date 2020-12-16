@@ -773,5 +773,5 @@ class BinanceDataWebsocketApi(WebsocketClient):
 def generate_datetime(timestamp: float) -> datetime:
     """"""
     dt = datetime.fromtimestamp(timestamp / 1000)
-    dt = CHINA_TZ.localize(dt)
+    dt = dt.replace(tzinfo=CHINA_TZ)
     return dt

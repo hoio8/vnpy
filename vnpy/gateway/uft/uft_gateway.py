@@ -59,7 +59,7 @@ from vnpy.trader.object import (
     CancelRequest,
     SubscribeRequest,
 )
-from vnpy.trader.utility import get_folder_path, TRADER_DIR
+from vnpy.trader.utility import get_folder_path
 from vnpy.trader.event import EVENT_TIMER
 from vnpy.event import EventEngine
 
@@ -90,10 +90,9 @@ ORDERTYPE_UFT2VT: Dict[str, OrderType] = {v: k for k, v in ORDERTYPE_VT2UFT.item
 OFFSET_VT2UFT: Dict[Offset, str] = {
     Offset.OPEN: HS_OF_Open,
     Offset.CLOSE: HS_OF_Close,
-    Offset.CLOSETODAY: HS_OF_CloseToday
+    Offset.CLOSETODAY: HS_OF_CloseToday,
 }
 OFFSET_UFT2VT: Dict[str, Offset] = {v: k for k, v in OFFSET_VT2UFT.items()}
-OFFSET_VT2UFT[Offset.CLOSEYESTERDAY] = HS_OF_Close
 
 EXCHANGE_UFT2VT: Dict[str, Exchange] = {
     HS_EI_CFFEX: Exchange.CFFEX,
@@ -133,12 +132,11 @@ class UftGateway(BaseGateway):
     default_setting: Dict[str, str] = {
         "用户名": "",
         "密码": "",
-        "行情服务器": "",
-        "交易服务器": "",
+        "服务器地址": "",
         "服务器类型": ["期货", "ETF期权"],
         "产品名称": "",
         "授权编码": "",
-        "委托类型": "q"
+        "产品信息": ""
     }
 
     exchanges: List[Exchange] = list(EXCHANGE_UFT2VT.values())
@@ -154,41 +152,29 @@ class UftGateway(BaseGateway):
         """"""
         userid = setting["用户名"]
         password = setting["密码"]
-        md_address = setting["行情服务器"]
-        td_address = setting["交易服务器"]
+        address = setting["服务器地址"]
         server = setting["服务器类型"]
         appid = setting["产品名称"]
         auth_code = setting["授权编码"]
-        application_type = setting["委托类型"]
 
-        if not md_address.startswith("tcp://"):
-            md_address = "tcp://" + md_address
+        if not address.startswith("tcp://"):
+            address = "tcp://" + address
 
-        if not td_address.startswith("tcp://"):
-            td_address = "tcp://" + td_address
-
-        # Check license file path
-        license_path = TRADER_DIR.joinpath("license.dat")
-
-        if license_path.exists():
-            server_license = str(license_path)
+        if server == "期货":
+            server_license = FUTURES_LICENSE
         else:
-            if server == "期货":
-                server_license = FUTURES_LICENSE
-            else:
-                server_license = OPTION_LICENSE
+            server_license = OPTION_LICENSE
 
         self.td_api.connect(
-            td_address,
+            address,
             server_license,
             userid,
             password,
             auth_code,
-            appid,
-            application_type
+            appid
         )
         self.md_api.connect(
-            md_address,
+            address,
             server_license
         )
 
@@ -271,8 +257,7 @@ class UftMdApi(MdApi):
         """
         Callback when front server is disconnected.
         """
-        msg = self.getApiErrorMsg(reason)
-        self.gateway.write_log(f"行情服务器连接断开，原因：{reason}，{msg}")
+        self.gateway.write_log(f"行情服务器连接断开，原因{reason}")
 
     def onRspDepthMarketDataSubscribe(
         self,
@@ -297,7 +282,7 @@ class UftMdApi(MdApi):
 
         timestamp = f"{data['TradingDay']} {data['UpdateTime']}000"
         dt = datetime.strptime(timestamp, "%Y%m%d %H%M%S%f")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         tick = TickData(
             symbol=symbol,
@@ -406,7 +391,6 @@ class UftTdApi(TdApi):
         self.password: str = ""
         self.auth_code: str = ""
         self.appid: str = ""
-        self.application_type: str = ""
 
         self.frontid: int = 0
         self.sessionid: int = 0
@@ -426,9 +410,7 @@ class UftTdApi(TdApi):
     def onFrontDisconnected(self, reason: int) -> None:
         """"""
         self.login_status = False
-
-        msg = self.getApiErrorMsg(reason)
-        self.gateway.write_log(f"交易服务器连接断开，原因：{reason}，{msg}")
+        self.gateway.write_log(f"交易服务器连接断开，原因{reason}")
 
     def onRspAuthenticate(
         self,
@@ -575,7 +557,13 @@ class UftTdApi(TdApi):
                 )
                 self.positions[key] = position
 
-            position.yd_volume = data["PositionVolume"] - data["TodayPositionVolume"]
+            # For SHFE and INE position data update
+            if position.exchange in [Exchange.SHFE, Exchange.INE]:
+                if data["YdPositionVolume"] and not data["TodayPositionVolume"]:
+                    position.yd_volume = data["PositionVolume"]
+            # For other exchange position data update
+            else:
+                position.yd_volume = data["PositionVolume"] - data["TodayPositionVolume"]
 
             # Get contract size (spread contract has no size value)
             size = symbol_size_map.get(position.symbol, 0)
@@ -675,7 +663,7 @@ class UftTdApi(TdApi):
         insert_time = generate_time(data["InsertTime"])
         timestamp = f"{data['InsertDate']} {insert_time}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         if not order:
             order = OrderData(
@@ -694,7 +682,7 @@ class UftTdApi(TdApi):
             )
             self.orders[orderid] = order
         else:
-            order.traded = data["TradeVolume"]
+            order.traded = data["OrderVolume"]
             order.status = STATUS_UFT2VT.get(data["OrderStatus"], Status.SUBMITTING)
 
         self.gateway.on_order(order)
@@ -727,7 +715,7 @@ class UftTdApi(TdApi):
         trade_time = generate_time(data["TradeTime"])
         timestamp = f"{data['TradeDate']} {trade_time}"
         dt = datetime.strptime(timestamp, "%H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         trade = TradeData(
             symbol=symbol,
@@ -750,8 +738,7 @@ class UftTdApi(TdApi):
         userid: str,
         password: str,
         auth_code: str,
-        appid: str,
-        application_type: str
+        appid: str
     ) -> None:
         """
         Start connection to server.
@@ -760,7 +747,6 @@ class UftTdApi(TdApi):
         self.password = password
         self.auth_code = auth_code
         self.appid = appid
-        self.application_type = application_type
 
         if not self.connect_status:
             path = get_folder_path(self.gateway_name.lower())
@@ -805,7 +791,7 @@ class UftTdApi(TdApi):
         req = {
             "AccountID": self.userid,
             "Password": self.password,
-            "UserApplicationType": self.application_type,
+            "UserApplicationType": "q",
             "UserApplicationInfo": "",
             "MacAddress": "",
             "IPAddress": "",

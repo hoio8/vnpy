@@ -95,12 +95,8 @@ class Exchange(Enum):
     NYSE = "NYSE"           # New York Stock Exchnage
     NASDAQ = "NASDAQ"       # Nasdaq Exchange
     ARCA = "ARCA"           # ARCA Exchange
-    EDGEA = "EDGEA"         # Direct Edge Exchange
-    ISLAND = "ISLAND"       # Nasdaq Island ECN
-    BATS = "BATS"           # Bats Global Markets
-    IEX = "IEX"             # The Investors Exchange
     NYMEX = "NYMEX"         # New York Mercantile Exchange
-    COMEX = "COMEX"         # COMEX of CME
+    COMEX = "COMEX"         # a division of theNew York Mercantile Exchange
     GLOBEX = "GLOBEX"       # Globex of CME
     IDEALPRO = "IDEALPRO"   # Forex ECN of Interactive Brokers
     CME = "CME"             # Chicago Mercantile Exchange
@@ -120,8 +116,8 @@ class Exchange(Enum):
     TOCOM = "TOCOM"         # Tokyo Commodity Exchange
     EUNX = "EUNX"           # Euronext Exchange
     KRX = "KRX"             # Korean Exchange
-    OTC = "OTC"             # OTC Forex Broker
-    IBKRATS = "IBKRATS"     # Paper Trading Exchange of IB
+
+    OANDA = "OANDA"         # oanda.com
 
     # CryptoCurrency
     BITMEX = "BITMEX"
@@ -156,4 +152,3 @@ class Interval(Enum):
     HOUR = "1h"
     DAILY = "d"
     WEEKLY = "w"
-    TICK = "tick"

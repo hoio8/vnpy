@@ -10,7 +10,7 @@ from copy import copy
 from datetime import datetime, timedelta
 from enum import Enum
 from threading import Lock
-from typing import Dict, List, Tuple
+from typing import Dict, List
 import pytz
 
 from vnpy.api.rest import RestClient, Request
@@ -41,38 +41,27 @@ from vnpy.trader.object import (
 from vnpy.trader.event import EVENT_TIMER
 from vnpy.event import Event, EventEngine
 
-F_REST_HOST: str = "https://fapi.binance.com"
-F_WEBSOCKET_TRADE_HOST: str = "wss://fstream.binance.com/ws/"
-F_WEBSOCKET_DATA_HOST: str = "wss://fstream.binance.com/stream?streams="
+REST_HOST: str = "https://fapi.binance.com"
+WEBSOCKET_TRADE_HOST: str = "wss://fstream.binance.com/ws/"
+WEBSOCKET_DATA_HOST: str = "wss://fstream.binance.com/stream?streams="
 
-F_TESTNET_RESTT_HOST: str = "https://testnet.binancefuture.com"
-F_TESTNET_WEBSOCKET_TRADE_HOST: str = "wss://stream.binancefuture.com/ws/"
-F_TESTNET_WEBSOCKET_DATA_HOST: str = "wss://stream.binancefuture.com/stream?streams="
-
-D_REST_HOST: str = "https://dapi.binance.com"
-D_WEBSOCKET_TRADE_HOST: str = "wss://dstream.binance.com/ws/"
-D_WEBSOCKET_DATA_HOST: str = "wss://dstream.binance.com/stream?streams="
-
-D_TESTNET_RESTT_HOST: str = "https://testnet.binancefuture.com"
-D_TESTNET_WEBSOCKET_TRADE_HOST: str = "wss://dstream.binancefuture.com/ws/"
-D_TESTNET_WEBSOCKET_DATA_HOST: str = "wss://dstream.binancefuture.com/stream?streams="
+TESTNET_RESTT_HOST: str = "https://testnet.binancefuture.com"
+TESTNET_WEBSOCKET_TRADE_HOST: str = "wss://stream.binancefuture.com/ws/"
+TESTNET_WEBSOCKET_DATA_HOST: str = "wss://stream.binancefuture.com/stream?streams="
 
 STATUS_BINANCES2VT: Dict[str, Status] = {
     "NEW": Status.NOTTRADED,
     "PARTIALLY_FILLED": Status.PARTTRADED,
     "FILLED": Status.ALLTRADED,
     "CANCELED": Status.CANCELLED,
-    "REJECTED": Status.REJECTED,
-    "EXPIRED": Status.CANCELLED
+    "REJECTED": Status.REJECTED
 }
 
-ORDERTYPE_VT2BINANCES: Dict[OrderType, Tuple[str, str]] = {
-    OrderType.LIMIT: ("LIMIT", "GTC"),
-    OrderType.MARKET: ("MARKET", "GTC"),
-    OrderType.FAK: ("LIMIT", "IOC"),
-    OrderType.FOK: ("LIMIT", "FOK"),
+ORDERTYPE_VT2BINANCES: Dict[OrderType, str] = {
+    OrderType.LIMIT: "LIMIT",
+    OrderType.MARKET: "MARKET"
 }
-ORDERTYPE_BINANCES2VT: Dict[Tuple[str, str], OrderType] = {v: k for k, v in ORDERTYPE_VT2BINANCES.items()}
+ORDERTYPE_BINANCES2VT: Dict[str, OrderType] = {v: k for k, v in ORDERTYPE_VT2BINANCES.items()}
 
 DIRECTION_VT2BINANCES: Dict[Direction, str] = {
     Direction.LONG: "BUY",
@@ -112,11 +101,10 @@ class BinancesGateway(BaseGateway):
     default_setting = {
         "key": "",
         "secret": "",
-        "会话数": 3,
-        "服务器": ["TESTNET", "REAL"],
-        "合约模式": ["反向", "正向"],
-        "代理地址": "",
-        "代理端口": 0,
+        "session_number": 3,
+        "server": ["TESTNET", "REAL"],
+        "proxy_host": "",
+        "proxy_port": 0,
     }
 
     exchanges: Exchange = [Exchange.BINANCE]
@@ -133,19 +121,14 @@ class BinancesGateway(BaseGateway):
         """"""
         key = setting["key"]
         secret = setting["secret"]
-        session_number = setting["会话数"]
-        server = setting["服务器"]
-        proxy_host = setting["代理地址"]
-        proxy_port = setting["代理端口"]
+        session_number = setting["session_number"]
+        server = setting["server"]
+        proxy_host = setting["proxy_host"]
+        proxy_port = setting["proxy_port"]
 
-        if setting["合约模式"] == "正向":
-            usdt_base = True
-        else:
-            usdt_base = False
-
-        self.rest_api.connect(usdt_base, key, secret, session_number, server,
+        self.rest_api.connect(key, secret, session_number, server,
                               proxy_host, proxy_port)
-        self.market_ws_api.connect(usdt_base, proxy_host, proxy_port, server)
+        self.market_ws_api.connect(proxy_host, proxy_port, server)
 
         self.event_engine.register(EVENT_TIMER, self.process_timer_event)
 
@@ -209,7 +192,6 @@ class BinancesRestApi(RestClient):
         self.order_count: int = 1_000_000
         self.order_count_lock: Lock = Lock()
         self.connect_time: int = 0
-        self.usdt_base: bool = False
 
     def sign(self, request: Request) -> Request:
         """
@@ -261,7 +243,6 @@ class BinancesRestApi(RestClient):
 
     def connect(
         self,
-        usdt_base: bool,
         key: str,
         secret: str,
         session_number: int,
@@ -272,7 +253,6 @@ class BinancesRestApi(RestClient):
         """
         Initialize connection to REST server.
         """
-        self.usdt_base = usdt_base
         self.key = key
         self.secret = secret.encode()
         self.proxy_port = proxy_port
@@ -284,15 +264,9 @@ class BinancesRestApi(RestClient):
         )
 
         if self.server == "REAL":
-            if self.usdt_base:
-                self.init(F_REST_HOST, proxy_host, proxy_port)
-            else:
-                self.init(D_REST_HOST, proxy_host, proxy_port)
+            self.init(REST_HOST, proxy_host, proxy_port)
         else:
-            if self.usdt_base:
-                self.init(F_TESTNET_RESTT_HOST, proxy_host, proxy_port)
-            else:
-                self.init(D_TESTNET_RESTT_HOST, proxy_host, proxy_port)
+            self.init(TESTNET_RESTT_HOST, proxy_host, proxy_port)
 
         self.start(session_number)
 
@@ -310,11 +284,7 @@ class BinancesRestApi(RestClient):
         data = {
             "security": Security.NONE
         }
-
-        if self.usdt_base:
-            path = "/fapi/v1/time"
-        else:
-            path = "/dapi/v1/time"
+        path = "/fapi/v1/time"
 
         return self.add_request(
             "GET",
@@ -327,14 +297,9 @@ class BinancesRestApi(RestClient):
         """"""
         data = {"security": Security.SIGNED}
 
-        if self.usdt_base:
-            path = "/fapi/v1/account"
-        else:
-            path = "/dapi/v1/account"
-
         self.add_request(
             method="GET",
-            path=path,
+            path="/fapi/v1/account",
             callback=self.on_query_account,
             data=data
         )
@@ -343,14 +308,9 @@ class BinancesRestApi(RestClient):
         """"""
         data = {"security": Security.SIGNED}
 
-        if self.usdt_base:
-            path = "/fapi/v1/positionRisk"
-        else:
-            path = "/dapi/v1/positionRisk"
-
         self.add_request(
             method="GET",
-            path=path,
+            path="/fapi/v1/positionRisk",
             callback=self.on_query_position,
             data=data
         )
@@ -359,14 +319,9 @@ class BinancesRestApi(RestClient):
         """"""
         data = {"security": Security.SIGNED}
 
-        if self.usdt_base:
-            path = "/fapi/v1/openOrders"
-        else:
-            path = "/dapi/v1/openOrders"
-
         self.add_request(
             method="GET",
-            path=path,
+            path="/fapi/v1/openOrders",
             callback=self.on_query_order,
             data=data
         )
@@ -376,15 +331,9 @@ class BinancesRestApi(RestClient):
         data = {
             "security": Security.NONE
         }
-
-        if self.usdt_base:
-            path = "/fapi/v1/exchangeInfo"
-        else:
-            path = "/dapi/v1/exchangeInfo"
-
         self.add_request(
             method="GET",
-            path=path,
+            path="/fapi/v1/exchangeInfo",
             callback=self.on_query_contract,
             data=data
         )
@@ -408,29 +357,21 @@ class BinancesRestApi(RestClient):
             "security": Security.SIGNED
         }
 
-        order_type, time_condition = ORDERTYPE_VT2BINANCES[req.type]
-
         params = {
             "symbol": req.symbol,
+            "timeInForce": "GTC",
             "side": DIRECTION_VT2BINANCES[req.direction],
-            "type": order_type,
-            "timeInForce": time_condition,
+            "type": ORDERTYPE_VT2BINANCES[req.type],
             "price": float(req.price),
             "quantity": float(req.volume),
             "newClientOrderId": orderid,
         }
-
         if req.offset == Offset.CLOSE:
             params["reduceOnly"] = True
 
-        if self.usdt_base:
-            path = "/fapi/v1/order"
-        else:
-            path = "/dapi/v1/order"
-
         self.add_request(
             method="POST",
-            path=path,
+            path="/fapi/v1/order",
             callback=self.on_send_order,
             data=data,
             params=params,
@@ -452,14 +393,9 @@ class BinancesRestApi(RestClient):
             "origClientOrderId": req.orderid
         }
 
-        if self.usdt_base:
-            path = "/fapi/v1/order"
-        else:
-            path = "/dapi/v1/order"
-
         self.add_request(
             method="DELETE",
-            path=path,
+            path="/fapi/v1/order",
             callback=self.on_cancel_order,
             params=params,
             data=data,
@@ -472,14 +408,9 @@ class BinancesRestApi(RestClient):
             "security": Security.API_KEY
         }
 
-        if self.usdt_base:
-            path = "/fapi/v1/listenKey"
-        else:
-            path = "/dapi/v1/listenKey"
-
         self.add_request(
             method="POST",
-            path=path,
+            path="/fapi/v1/listenKey",
             callback=self.on_start_user_stream,
             data=data
         )
@@ -499,13 +430,9 @@ class BinancesRestApi(RestClient):
             "listenKey": self.user_stream_key
         }
 
-        if self.usdt_base:
-            path = "/fapi/v1/listenKey"
-        else:
-            path = "/dapi/v1/listenKey"
         self.add_request(
             method="PUT",
-            path=path,
+            path="/fapi/v1/listenKey",
             callback=self.on_keep_user_stream,
             params=params,
             data=data
@@ -553,8 +480,7 @@ class BinancesRestApi(RestClient):
     def on_query_order(self, data: dict, request: Request) -> None:
         """"""
         for d in data:
-            key = (d["type"], d["timeInForce"])
-            order_type = ORDERTYPE_BINANCES2VT.get(key, None)
+            order_type = ORDERTYPE_BINANCES2VT.get(d["type"], None)
             if not order_type:
                 continue
 
@@ -647,13 +573,9 @@ class BinancesRestApi(RestClient):
         self.keep_alive_count = 0
 
         if self.server == "REAL":
-            url = F_WEBSOCKET_TRADE_HOST + self.user_stream_key
-            if not self.usdt_base:
-                url = D_WEBSOCKET_TRADE_HOST + self.user_stream_key
+            url = WEBSOCKET_TRADE_HOST + self.user_stream_key
         else:
-            url = F_TESTNET_WEBSOCKET_TRADE_HOST + self.user_stream_key
-            if not self.usdt_base:
-                url = D_TESTNET_WEBSOCKET_TRADE_HOST + self.user_stream_key
+            url = TESTNET_WEBSOCKET_TRADE_HOST + self.user_stream_key
 
         self.trade_ws_api.connect(url, self.proxy_host, self.proxy_port)
 
@@ -682,14 +604,9 @@ class BinancesRestApi(RestClient):
                 params["endTime"] = end_time * 1000     # convert to millisecond
 
             # Get response from server
-            if self.usdt_base:
-                path = "/fapi/v1/klines"
-            else:
-                path = "/dapi/v1/klines"
-
             resp = self.request(
                 "GET",
-                path=path,
+                "/fapi/v1/klines",
                 data={"security": Security.NONE},
                 params=params
             )
@@ -795,8 +712,8 @@ class BinancesTradeWebsocketApi(WebsocketClient):
     def on_order(self, packet: dict) -> None:
         """"""
         ord_data = packet["o"]
-        key = (ord_data["o"], ord_data["f"])
-        order_type = ORDERTYPE_BINANCES2VT.get(key, None)
+
+        order_type = ORDERTYPE_BINANCES2VT.get(ord_data["o"], None)
         if not order_type:
             return
 
@@ -846,17 +763,14 @@ class BinancesDataWebsocketApi(WebsocketClient):
         self.gateway_name: str = gateway.gateway_name
 
         self.ticks: Dict[str, TickData] = {}
-        self.usdt_base = False
 
     def connect(
         self,
-        usdt_base: bool,
         proxy_host: str,
         proxy_port: int,
         server: str
     ) -> None:
         """"""
-        self.usdt_base = usdt_base
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
         self.server = server
@@ -893,13 +807,9 @@ class BinancesDataWebsocketApi(WebsocketClient):
             channels.append(ws_symbol + "@depth5")
 
         if self.server == "REAL":
-            url = F_WEBSOCKET_DATA_HOST + "/".join(channels)
-            if not self.usdt_base:
-                url = D_WEBSOCKET_DATA_HOST + "/".join(channels)
+            url = WEBSOCKET_DATA_HOST + "/".join(channels)
         else:
-            url = F_TESTNET_WEBSOCKET_DATA_HOST + "/".join(channels)
-            if not self.usdt_base:
-                url = D_TESTNET_WEBSOCKET_DATA_HOST + "/".join(channels)
+            url = TESTNET_WEBSOCKET_DATA_HOST + "/".join(channels)
 
         self.init(url, self.proxy_host, self.proxy_port)
         self.start()
@@ -921,13 +831,13 @@ class BinancesDataWebsocketApi(WebsocketClient):
             tick.datetime = datetime.fromtimestamp(float(data['E']) / 1000)
         else:
             bids = data["b"]
-            for n in range(min(5, len(bids))):
+            for n in range(5):
                 price, volume = bids[n]
                 tick.__setattr__("bid_price_" + str(n + 1), float(price))
                 tick.__setattr__("bid_volume_" + str(n + 1), float(volume))
 
             asks = data["a"]
-            for n in range(min(5, len(asks))):
+            for n in range(5):
                 price, volume = asks[n]
                 tick.__setattr__("ask_price_" + str(n + 1), float(price))
                 tick.__setattr__("ask_volume_" + str(n + 1), float(volume))
@@ -939,5 +849,5 @@ class BinancesDataWebsocketApi(WebsocketClient):
 def generate_datetime(timestamp: float) -> datetime:
     """"""
     dt = datetime.fromtimestamp(timestamp / 1000)
-    dt = CHINA_TZ.localize(dt)
+    dt = dt.replace(tzinfo=CHINA_TZ)
     return dt

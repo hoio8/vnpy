@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Callable, Dict, Tuple, Union, Optional
+from typing import Callable, Dict, Tuple, Union
 from decimal import Decimal
 from math import floor, ceil
 
@@ -153,14 +153,11 @@ def get_digits(value: float) -> int:
     """
     value_str = str(value)
 
-    if "e-" in value_str:
-        _, buf = value_str.split("e-")
-        return int(buf)
-    elif "." in value_str:
+    if "." not in value_str:
+        return 0
+    else:
         _, buf = value_str.split(".")
         return len(buf)
-    else:
-        return 0
 
 
 class BarGenerator:
@@ -205,13 +202,13 @@ class BarGenerator:
         if not tick.last_price:
             return
 
-        # Filter tick data with less intraday trading volume (i.e. older timestamp)
-        if self.last_tick and tick.volume and tick.volume < self.last_tick.volume:
+        # Filter tick data with older timestamp
+        if self.last_tick and tick.datetime < self.last_tick.datetime:
             return
 
         if not self.bar:
             new_minute = True
-        elif(self.bar.datetime.minute != tick.datetime.minute) or (self.bar.datetime.hour != tick.datetime.hour):
+        elif self.bar.datetime.minute != tick.datetime.minute:
             self.bar.datetime = self.bar.datetime.replace(
                 second=0, microsecond=0
             )
@@ -305,7 +302,7 @@ class BarGenerator:
         # Cache last bar object
         self.last_bar = bar
 
-    def generate(self) -> Optional[BarData]:
+    def generate(self) -> None:
         """
         Generate the bar data and call callback immediately.
         """
@@ -439,17 +436,11 @@ class ArrayManager(object):
             return result
         return result[-1]
 
-    def apo(
-        self,
-        fast_period: int,
-        slow_period: int,
-        matype: int = 0,
-        array: bool = False
-    ) -> Union[float, np.ndarray]:
+    def apo(self, n: int, array: bool = False) -> Union[float, np.ndarray]:
         """
         APO.
         """
-        result = talib.APO(self.close, fast_period, slow_period, matype)
+        result = talib.APO(self.close, n)
         if array:
             return result
         return result[-1]
@@ -472,17 +463,11 @@ class ArrayManager(object):
             return result
         return result[-1]
 
-    def ppo(
-        self,
-        fast_period: int,
-        slow_period: int,
-        matype: int = 0,
-        array: bool = False
-    ) -> Union[float, np.ndarray]:
+    def ppo(self, n: int, array: bool = False) -> Union[float, np.ndarray]:
         """
         PPO.
         """
-        result = talib.PPO(self.close, fast_period, slow_period, matype)
+        result = talib.PPO(self.close, n)
         if array:
             return result
         return result[-1]
@@ -532,11 +517,11 @@ class ArrayManager(object):
             return result
         return result[-1]
 
-    def std(self, n: int, nbdev: int = 1, array: bool = False) -> Union[float, np.ndarray]:
+    def std(self, n: int, array: bool = False) -> Union[float, np.ndarray]:
         """
         Standard deviation.
         """
-        result = talib.STDDEV(self.close, n, nbdev)
+        result = talib.STDDEV(self.close, n)
         if array:
             return result
         return result[-1]
@@ -660,17 +645,11 @@ class ArrayManager(object):
             return result
         return result[-1]
 
-    def ultosc(
-        self,
-        time_period1: int = 7,
-        time_period2: int = 14,
-        time_period3: int = 28,
-        array: bool = False
-    ) -> Union[float, np.ndarray]:
+    def ultosc(self, array: bool = False) -> Union[float, np.ndarray]:
         """
         Ultimate Oscillator.
         """
-        result = talib.ULTOSC(self.high, self.low, self.close, time_period1, time_period2, time_period3)
+        result = talib.ULTOSC(self.high, self.low, self.close)
         if array:
             return result
         return result[-1]
@@ -697,7 +676,7 @@ class ArrayManager(object):
         Bollinger Channel.
         """
         mid = self.sma(n, array)
-        std = self.std(n, 1, array)
+        std = self.std(n, array)
 
         up = mid + std * dev
         down = mid - std * dev
@@ -796,25 +775,20 @@ class ArrayManager(object):
             return result
         return result[-1]
 
-    def ad(self, array: bool = False) -> Union[float, np.ndarray]:
+    def ad(self, n: int, array: bool = False) -> Union[float, np.ndarray]:
         """
         AD.
         """
-        result = talib.AD(self.high, self.low, self.close, self.volume)
+        result = talib.AD(self.high, self.low, self.close, self.volume, n)
         if array:
             return result
         return result[-1]
 
-    def adosc(
-        self,
-        fast_period: int,
-        slow_period: int,
-        array: bool = False
-    ) -> Union[float, np.ndarray]:
+    def adosc(self, n: int, array: bool = False) -> Union[float, np.ndarray]:
         """
         ADOSC.
         """
-        result = talib.ADOSC(self.high, self.low, self.close, self.volume, fast_period, slow_period)
+        result = talib.ADOSC(self.high, self.low, self.close, self.volume, n)
         if array:
             return result
         return result[-1]

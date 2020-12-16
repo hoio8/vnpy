@@ -285,7 +285,7 @@ class SoptMdApi(MdApi):
             return
         timestamp = f"{data['TradingDay']} {data['UpdateTime']}.{int(data['UpdateMillisec']/100)}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S.%f")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         tick = TickData(
             symbol=symbol,
@@ -509,17 +509,10 @@ class SoptTdApi(TdApi):
         # Get buffered position object
         key = f"{data['InstrumentID'], data['PosiDirection']}"
         position = self.positions.get(key, None)
-
-        symbol = data["InstrumentID"]
-        if "&" in symbol:
-            exchange = Exchange.SSE
-        else:
-            exchange = symbol_exchange_map[data["InstrumentID"]]
-
         if not position:
             position = PositionData(
-                symbol=symbol,
-                exchange=exchange,
+                symbol=data["InstrumentID"],
+                exchange=symbol_exchange_map[data["InstrumentID"]],
                 direction=DIRECTION_SOPT2VT[data["PosiDirection"]],
                 gateway_name=self.gateway_name
             )
@@ -639,7 +632,7 @@ class SoptTdApi(TdApi):
 
         timestamp = f"{data['InsertDate']} {data['InsertTime']}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         order = OrderData(
             symbol=symbol,
@@ -673,7 +666,7 @@ class SoptTdApi(TdApi):
 
         timestamp = f"{data['TradeDate']} {data['TradeTime']}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         trade = TradeData(
             symbol=symbol,

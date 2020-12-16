@@ -124,8 +124,7 @@ class ScriptEngine(BaseEngine):
             type=order_type,
             volume=volume,
             price=price,
-            offset=offset,
-            reference=APP_NAME
+            offset=offset
         )
 
         vt_orderid = self.main_engine.send_order(req, contract.gateway_name)

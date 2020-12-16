@@ -2,12 +2,11 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Set, Tuple
 from functools import lru_cache
-from copy import copy
 import traceback
 
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
+import seaborn as sns
 from pandas import DataFrame
 
 from vnpy.trader.constant import Direction, Offset, Interval, Status
@@ -16,6 +15,9 @@ from vnpy.trader.object import OrderData, TradeData, BarData
 from vnpy.trader.utility import round_to, extract_vt_symbol
 
 from .template import StrategyTemplate
+
+# Set seaborn style
+sns.set_style("whitegrid")
 
 
 INTERVAL_DELTA_MAP = {
@@ -111,7 +113,7 @@ class BacktestingEngine:
     def add_strategy(self, strategy_class: type, setting: dict) -> None:
         """"""
         self.strategy = strategy_class(
-            self, strategy_class.__name__, copy(self.vt_symbols), setting
+            self, strategy_class.__name__, self.vt_symbols, setting
         )
 
     def load_data(self) -> None:
@@ -344,15 +346,12 @@ class BacktestingEngine:
             daily_return = df["return"].mean() * 100
             return_std = df["return"].std() * 100
 
-            pnl_std = df["net_pnl"].std()
-
             if return_std:
-                # sharpe_ratio = daily_return / return_std * np.sqrt(240)
-                sharpe_ratio = daily_net_pnl / pnl_std * np.sqrt(240)
+                sharpe_ratio = daily_return / return_std * np.sqrt(240)
             else:
                 sharpe_ratio = 0
 
-            return_drawdown_ratio = -total_net_pnl / max_drawdown
+            return_drawdown_ratio = -total_return / max_ddpercent
 
         # Output
         if output:
@@ -438,37 +437,25 @@ class BacktestingEngine:
         if df is None:
             return
 
-        fig = make_subplots(
-            rows=4,
-            cols=1,
-            subplot_titles=["Balance", "Drawdown", "Daily Pnl", "Pnl Distribution"],
-            vertical_spacing=0.06
-        )
+        plt.figure(figsize=(10, 16))
 
-        balance_line = go.Scatter(
-            x=df.index,
-            y=df["balance"],
-            mode="lines",
-            name="Balance"
-        )
-        drawdown_scatter = go.Scatter(
-            x=df.index,
-            y=df["drawdown"],
-            fillcolor="red",
-            fill='tozeroy',
-            mode="lines",
-            name="Drawdown"
-        )
-        pnl_bar = go.Bar(y=df["net_pnl"], name="Daily Pnl")
-        pnl_histogram = go.Histogram(x=df["net_pnl"], nbinsx=100, name="Days")
+        balance_plot = plt.subplot(4, 1, 1)
+        balance_plot.set_title("Balance")
+        df["balance"].plot(legend=True)
 
-        fig.add_trace(balance_line, row=1, col=1)
-        fig.add_trace(drawdown_scatter, row=2, col=1)
-        fig.add_trace(pnl_bar, row=3, col=1)
-        fig.add_trace(pnl_histogram, row=4, col=1)
+        drawdown_plot = plt.subplot(4, 1, 2)
+        drawdown_plot.set_title("Drawdown")
+        drawdown_plot.fill_between(range(len(df)), df["drawdown"].values)
 
-        fig.update_layout(height=1000, width=1000)
-        fig.show()
+        pnl_plot = plt.subplot(4, 1, 3)
+        pnl_plot.set_title("Daily Pnl")
+        df["net_pnl"].plot(kind="bar", legend=False, grid=False, xticks=[])
+
+        distribution_plot = plt.subplot(4, 1, 4)
+        distribution_plot.set_title("Daily Pnl Distribution")
+        df["net_pnl"].hist(bins=50)
+
+        plt.show()
 
     def update_daily_close(self, bars: Dict[str, BarData], dt: datetime) -> None:
         """"""
@@ -489,28 +476,14 @@ class BacktestingEngine:
         """"""
         self.datetime = dt
 
-        # self.bars.clear()
+        self.bars.clear()
         for vt_symbol in self.vt_symbols:
             bar = self.history_data.get((dt, vt_symbol), None)
-
-            # If bar data of vt_symbol at dt exists
             if bar:
                 self.bars[vt_symbol] = bar
-            # Otherwise, use previous data to backfill
-            elif vt_symbol in self.bars:
-                old_bar = self.bars[vt_symbol]
-
-                bar = BarData(
-                    symbol=old_bar.symbol,
-                    exchange=old_bar.exchange,
-                    datetime=dt,
-                    open_price=old_bar.close_price,
-                    high_price=old_bar.close_price,
-                    low_price=old_bar.close_price,
-                    close_price=old_bar.close_price,
-                    gateway_name=old_bar.gateway_name
-                )
-                self.bars[vt_symbol] = bar
+            else:
+                dt_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                self.output(f"数据缺失：{dt_str} {vt_symbol}")
 
         self.cross_limit_order()
         self.strategy.on_bars(self.bars)
@@ -828,9 +801,8 @@ class PortfolioDailyResult:
         self.close_prices = close_prices
 
         for vt_symbol, close_price in close_prices.items():
-            contract_result = self.contract_results.get(vt_symbol, None)
-            if contract_result:
-                contract_result.update_close_price(close_price)
+            contract_result = self.contract_results[vt_symbol]
+            contract_result.update_close_price(close_price)
 
 
 @lru_cache(maxsize=999)

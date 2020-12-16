@@ -291,7 +291,7 @@ class XgjMdApi(MdApi):
 
         timestamp = f"{data['ActionDay']} {data['UpdateTime']}.{int(data['UpdateMillisec']/100)}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S.%f")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         tick = TickData(
             symbol=symbol,
@@ -605,7 +605,7 @@ class XgjTdApi(TdApi):
 
         timestamp = f"{data['InsertDate']} {data['InsertTime']}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         order = OrderData(
             symbol=symbol,
@@ -639,7 +639,7 @@ class XgjTdApi(TdApi):
 
         timestamp = f"{data['TradeDate']} {data['TradeTime']}"
         dt = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt = dt.replace(tzinfo=CHINA_TZ)
 
         trade = TradeData(
             symbol=symbol,
